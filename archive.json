@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-10-08T00:46:39.725779+00:00",
+  "timestamp": "2020-10-11T00:59:37.725073+00:00",
   "repo": "ietf-wg-masque/draft-ietf-masque-connect-udp",
   "labels": [
     {
@@ -290,6 +290,131 @@
           "updatedAt": "2020-08-28T04:17:13Z"
         }
       ]
+    },
+    {
+      "number": 9,
+      "id": "MDU6SXNzdWU3MTc0OTQ2Nzc=",
+      "title": "Just curious about \"0-length\" datagrams",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/9",
+      "state": "OPEN",
+      "author": "LPardue",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "I just opened an issue on HTTP/3 datagram: https://github.com/DavidSchinazi/draft-h3-datagram/issues/8. There I suggest that receiving an H3 DATAGRAM frame with 0-length payload is an H3_FRAME_ERROR. \r\n\r\nBut after the flow ID \"is taken off\" the usable payload could be 0. I just wanted to check that a MASQUE proxy is fine to send 0-length UDP datagrams back and forth to an origin. That seems to be as-designed.",
+      "createdAt": "2020-10-08T16:31:22Z",
+      "updatedAt": "2020-10-08T17:14:24Z",
+      "closedAt": null,
+      "comments": [
+        {
+          "author": "DavidSchinazi",
+          "authorAssociation": "COLLABORATOR",
+          "body": "From reading RFC 768 and 2675, as far as I can tell UDP datagrams with an empty payload are allowed, so I don't think we need to do anything in CONNECT-UDP, they'll just work.",
+          "createdAt": "2020-10-08T16:39:55Z",
+          "updatedAt": "2020-10-08T16:39:55Z"
+        },
+        {
+          "author": "LPardue",
+          "authorAssociation": "NONE",
+          "body": "Yeah, there's a resolved issue on DATAGRAM where we explicitly wanted to allow this type of model, so I support keeping that.",
+          "createdAt": "2020-10-08T17:14:24Z",
+          "updatedAt": "2020-10-08T17:14:24Z"
+        }
+      ]
+    },
+    {
+      "number": 10,
+      "id": "MDU6SXNzdWU3MTgzNjM1OTg=",
+      "title": "UDP Pacing and Bursting Limits",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/10",
+      "state": "OPEN",
+      "author": "martinduke",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "Who SHOULD have the responsibility for rate pacing and preventing bursts > ~10 packets? I can imagine a few models:\r\n\r\n- The client paces DATAGRAM frames on the tunneled UDP connection: this would allow QUIC implementations to not change, at least in this respect, when running over MASQUE. It also hopes the outer connection congestion control and/or the proxy logic will not cause these frames/datagrams to bunch up at their egresses.\r\n- The tunneled connection is as bursty as it wants to be, but the outer connection is paced: this has issues with heavy connection multiplexing, and the achievable rate on the outer connection may have no relationship to the rate end-to-end.\r\n- The proxy applies pacing and burst limits at its UDP egress: it's not clear how the proxy would obtain the correct pacing rate without an explicit signal. Of course some UDP apps have no notion of these concepts, so then what?\r\n\r\nAnyway, I'm suspicious that a wild west approach with no advice at all will lead to suboptimal outcomes, though it would not break interop (I wouldn't suggest any MUSTs here). Not saying anything would also preclude any explicit signaling, if that turns out to be beneficial.\r\n\r\nArguably, this is a thing for Magnus's draft, but I suspect that, as with MTU, there is much stronger consensus that pacing is A Necessary Thing than all the IP header fields in that draft. The proxy has no mechanism to flow control datagrams, so some sort of check on egress would be nice to avoid becoming a DoS vector.",
+      "createdAt": "2020-10-09T19:07:07Z",
+      "updatedAt": "2020-10-09T21:01:18Z",
+      "closedAt": null,
+      "comments": [
+        {
+          "author": "DavidSchinazi",
+          "authorAssociation": "COLLABORATOR",
+          "body": "I agree that insufficient pacing can cause serious performance issues in applications that run over UDP. However, that's not a property of UDP proxying, that's a property of the end-to-end application protocol. I like the idea of adding text to recommend that the proxy does not introduce additional burstiness by queueing packets and then sending out a burst at a time. However, I'm not convinced that any explicit signaling for this would be beneficial, so I'd rather leave that top extensions.\r\n\r\nOn the topic of the DoS vector, I'd suggest filing a separate issue but I'll say that CONNECT had the benefit of not letting the client send more than a SYN until the end server has responded with a SYN-ACK, so we may want to have limitations on how much traffic can be sent until we receive a response from the server. Though the trickiness is that in TCP the server can always send a RST to tell the proxy to stop sending, and we don't have an equivalent in UDP.",
+          "createdAt": "2020-10-09T20:21:32Z",
+          "updatedAt": "2020-10-09T20:21:32Z"
+        },
+        {
+          "author": "martinduke",
+          "authorAssociation": "NONE",
+          "body": "Upon further reflection, given a strong recommendation to not buffer datagrams at the proxy, the only performance issue I can see presupposes that we have two layers of congestion control, which is not a good presumption at this point.\r\n\r\nSo I agree that adding text discouraging buffering Datagrams for bursts will solve this issue.",
+          "createdAt": "2020-10-09T21:01:18Z",
+          "updatedAt": "2020-10-09T21:01:18Z"
+        }
+      ]
+    },
+    {
+      "number": 11,
+      "id": "MDU6SXNzdWU3MTg0MjM4NTU=",
+      "title": "Limit Packets before server response",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/11",
+      "state": "OPEN",
+      "author": "martinduke",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "@DavidSchinazi in #10 suggested I file this as a separate issue.\r\n\r\nThe anonymization properties of MASQUE make it a nice vector to send out large bursts of datagrams to unsuspecting targets. It would be wise for MASQUE proxies to implement some sort of hard limit on datagrams it's willing to transmit without hearing anything from the server.\r\n\r\nOf course, the client here is working harder than either the proxy or the server, but it would be bad to get the proxy IP on a denylist.",
+      "createdAt": "2020-10-09T21:09:02Z",
+      "updatedAt": "2020-10-09T21:09:02Z",
+      "closedAt": null,
+      "comments": []
+    },
+    {
+      "number": 12,
+      "id": "MDU6SXNzdWU3MTg0MjYxMTY=",
+      "title": "Nested Congestion Control",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/12",
+      "state": "OPEN",
+      "author": "martinduke",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "This is a placeholder to discuss the effects/mitigations for nested congestion control, as required in the charter.",
+      "createdAt": "2020-10-09T21:13:57Z",
+      "updatedAt": "2020-10-10T21:12:55Z",
+      "closedAt": null,
+      "comments": [
+        {
+          "author": "martinduke",
+          "authorAssociation": "NONE",
+          "body": "Among the ugly issues here is that inner connection QUIC ACKs might be congestion controlled by the outer connection, and/or scheduled behind potentially large amounts of data on other streams.",
+          "createdAt": "2020-10-09T21:16:58Z",
+          "updatedAt": "2020-10-09T21:16:58Z"
+        },
+        {
+          "author": "DavidSchinazi",
+          "authorAssociation": "COLLABORATOR",
+          "body": "The way I think about this is that any router on the Internet implements a congestion controller. If we focus on a single direction of traffic, routers will have an input interface, and an output interface - if for some reason there are more packets coming into the input interface than the capacity of the output interface, then the router will have to exert control over that output link congestion, and its signaling mechanism is to drop some packets.\r\n\r\nWith that in mind, any TCP or QUIC connection going over the Internet has to deal with nested congestion controllers, and things work pretty decently. Going back to @martinduke's example from https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/12#issuecomment-706406176, any router can drop QUIC ACKs, and QUIC can handle that just fine.\r\n\r\nMy question is: how is a CONNECT-UDP proxy which can drop DATAGRAMs because of its congestion controller any different from a regular router than can drop packets due to its output link being saturated?\r\n\r\nTo clarify, I'm not suggesting we close this issue with no action - adding some notes explaining caveats sounds reasonable, but I don't see a need to develop an explicit solution to this problem.",
+          "createdAt": "2020-10-10T21:12:54Z",
+          "updatedAt": "2020-10-10T21:12:54Z"
+        }
+      ]
+    },
+    {
+      "number": 13,
+      "id": "MDU6SXNzdWU3MTg0MjY3MzM=",
+      "title": "Nested Loss Recovery",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/13",
+      "state": "OPEN",
+      "author": "martinduke",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "This is a placeholder to discuss the effects/mitigations for nested loss recovery, as required in the charter. Of course, this only applies to MASQUE running over HTTP versions with no DATAGRAM frames.",
+      "createdAt": "2020-10-09T21:15:17Z",
+      "updatedAt": "2020-10-09T21:15:17Z",
+      "closedAt": null,
+      "comments": []
     }
   ],
   "pulls": []
