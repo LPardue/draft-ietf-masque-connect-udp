@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-10-11T00:59:37.725073+00:00",
+  "timestamp": "2020-10-13T00:58:23.578682+00:00",
   "repo": "ietf-wg-masque/draft-ietf-masque-connect-udp",
   "labels": [
     {
@@ -381,7 +381,7 @@
       "labels": [],
       "body": "This is a placeholder to discuss the effects/mitigations for nested congestion control, as required in the charter.",
       "createdAt": "2020-10-09T21:13:57Z",
-      "updatedAt": "2020-10-10T21:12:55Z",
+      "updatedAt": "2020-10-12T18:10:49Z",
       "closedAt": null,
       "comments": [
         {
@@ -397,6 +397,13 @@
           "body": "The way I think about this is that any router on the Internet implements a congestion controller. If we focus on a single direction of traffic, routers will have an input interface, and an output interface - if for some reason there are more packets coming into the input interface than the capacity of the output interface, then the router will have to exert control over that output link congestion, and its signaling mechanism is to drop some packets.\r\n\r\nWith that in mind, any TCP or QUIC connection going over the Internet has to deal with nested congestion controllers, and things work pretty decently. Going back to @martinduke's example from https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/12#issuecomment-706406176, any router can drop QUIC ACKs, and QUIC can handle that just fine.\r\n\r\nMy question is: how is a CONNECT-UDP proxy which can drop DATAGRAMs because of its congestion controller any different from a regular router than can drop packets due to its output link being saturated?\r\n\r\nTo clarify, I'm not suggesting we close this issue with no action - adding some notes explaining caveats sounds reasonable, but I don't see a need to develop an explicit solution to this problem.",
           "createdAt": "2020-10-10T21:12:54Z",
           "updatedAt": "2020-10-10T21:12:54Z"
+        },
+        {
+          "author": "martinduke",
+          "authorAssociation": "NONE",
+          "body": "I don't think this is a question of correctness (it doesn't create infinite loops or deadlocks), but one of performance.\r\n\r\nWhile is some respects routers have \"congestion controllers\", they are generally not probing the path bandwidth or measuring latency, just looking at their local queue occupancy. Maybe your answer is to simply drop all datagrams for which there isn't immediately available cwnd; that may work, though we'd have to think about whether or not that's better than queueing them.\r\n\r\nIn QUIC we specifically exempted pure ACKs from congestion control because we were concerned about deadlocks, as congestion control could block sending ACKs that would unblock the connection. I don't think that's an issue here. But bad choices for the proxy scheduler could result in large delay spikes on these acks.\r\n\r\nI'll spend some time thinking about corner cases, but fundamentally I don't have a problem with your proposal to simply add some caveats.",
+          "createdAt": "2020-10-12T18:06:13Z",
+          "updatedAt": "2020-10-12T18:10:49Z"
         }
       ]
     },
