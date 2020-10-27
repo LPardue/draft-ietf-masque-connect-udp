@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-10-25T01:05:40.973992+00:00",
+  "timestamp": "2020-10-27T01:05:08.429217+00:00",
   "repo": "ietf-wg-masque/draft-ietf-masque-connect-udp",
   "labels": [
     {
@@ -420,6 +420,22 @@
       "body": "This is a placeholder to discuss the effects/mitigations for nested loss recovery, as required in the charter. Of course, this only applies to MASQUE running over HTTP versions with no DATAGRAM frames.",
       "createdAt": "2020-10-09T21:15:17Z",
       "updatedAt": "2020-10-09T21:15:17Z",
+      "closedAt": null,
+      "comments": []
+    },
+    {
+      "number": 14,
+      "id": "MDU6SXNzdWU3Mjk3NzI3MTg=",
+      "title": "Signal path change to end server?",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/14",
+      "state": "OPEN",
+      "author": "martinduke",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "If there is an address migration or NAT rebinding on the MASQUE connection, it might be good to have a synthetic event of the same type on any related outgoing UDP flows (i.e. change the MASQUE proxy's server-facing port).\r\n\r\nPros:\r\n- servers can reset their path specific variables, especially MTU.\r\n\r\nCons:\r\n- Would break UDP connections that don't support multihoming (including some QUIC server deployments!) One could argue that exposing this kind of thing to the endpoint actually preserves end-to-end information, I guess.\r\n- The resulting path validation would not otherwise be necessary, as the MASQUE connection already validated it.\r\n\r\nGiven the tradeoffs, perhaps this is a MAY for MASQUE proxies.",
+      "createdAt": "2020-10-26T17:41:48Z",
+      "updatedAt": "2020-10-26T17:41:48Z",
       "closedAt": null,
       "comments": []
     }
