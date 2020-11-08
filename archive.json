@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-11-05T00:40:55.914417+00:00",
+  "timestamp": "2020-11-08T00:44:44.556830+00:00",
   "repo": "ietf-wg-masque/draft-ietf-masque-connect-udp",
   "labels": [
     {
@@ -436,6 +436,84 @@
       "body": "If there is an address migration or NAT rebinding on the MASQUE connection, it might be good to have a synthetic event of the same type on any related outgoing UDP flows (i.e. change the MASQUE proxy's server-facing port).\r\n\r\nPros:\r\n- servers can reset their path specific variables, especially MTU.\r\n\r\nCons:\r\n- Would break UDP connections that don't support multihoming (including some QUIC server deployments!) One could argue that exposing this kind of thing to the endpoint actually preserves end-to-end information, I guess.\r\n- The resulting path validation would not otherwise be necessary, as the MASQUE connection already validated it.\r\n\r\nGiven the tradeoffs, perhaps this is a MAY for MASQUE proxies.",
       "createdAt": "2020-10-26T17:41:48Z",
       "updatedAt": "2020-10-26T17:41:48Z",
+      "closedAt": null,
+      "comments": []
+    },
+    {
+      "number": 15,
+      "id": "MDU6SXNzdWU3MzY4OTI5ODg=",
+      "title": "How do you salami slice CONNECT-UDP stream data?",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/15",
+      "state": "OPEN",
+      "author": "LPardue",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "So I'd kinda forgotten that when H3 DATAGRAMS are not available (e.g. in HTTP/2 etc) CONNECT-UDP allows a mode where UDP datagram payload is transferred to the proxy as one contiguous bytestream of HTTP payload. How do receiving endpoints slice up this bytestream to ensure the atomic payloads are reconstructed properly? A proxy needs to make sure it sends the correct payload in the UDP datagram is will send, a client needs to construct the accurate UDP datagram payload in order to process whatever protocol it is tunnelling.\r\n\r\nThe specification doesn't say anything about how message boundaries might be signalled or acted upon. Is the intention maybe to rely on DATA frames for delineation? Implementations might not be able to guarantee that frames boundaries match 1:1. For instance quiche provides a r[ecv_body() method](https://docs.quic.tech/quiche/h3/struct.Connection.html#method.recv_body) to read arbitrary amounts of payload data from request streams; DATA rame boundaries are not exposed to applications.",
+      "createdAt": "2020-11-05T12:29:46Z",
+      "updatedAt": "2020-11-05T18:27:05Z",
+      "closedAt": null,
+      "comments": [
+        {
+          "author": "tfpauly",
+          "authorAssociation": "NONE",
+          "body": "It's this, right?\r\n```\r\nIf HTTP/3 datagrams are not supported, the stream is used to convey UDP payloads, by prefixing them with a 16-bit length.\r\n```",
+          "createdAt": "2020-11-05T16:22:29Z",
+          "updatedAt": "2020-11-05T16:22:29Z"
+        },
+        {
+          "author": "LPardue",
+          "authorAssociation": "NONE",
+          "body": "I think so yes. I missed it somehow, so perhaps some editorial work would help improve things. For instance, the DATAGRAM frame supports up to 62-bit lengths but in this case case the frame is limited to 16 bits.\r\n\r\nIn the API I mentioned earlier, a proxy would need to try and read 2 bytes from the stream, then try to read as many bytes as the length indicated. That's certainly doable but needs a bit work in the application side. (those bytes might not be available, so the app needs to buffer things itself).\r\n\r\nIn the opposite direction there's a problem if the target presents datagrams with a length larger than can be expressed in 16 bits. We might want to highlight that the proxy can only drop these on the floor. Endpoints should be able to deal with that just like any PTB situation.",
+          "createdAt": "2020-11-05T16:43:23Z",
+          "updatedAt": "2020-11-05T18:27:05Z"
+        }
+      ]
+    },
+    {
+      "number": 16,
+      "id": "MDU6SXNzdWU3MzY4OTUxNTI=",
+      "title": "What purpose does datagram-flow-id fulfill?",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/16",
+      "state": "OPEN",
+      "author": "LPardue",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "I think it might help to make the purpose of the datagram-flow-id header clearer in the specification.\r\n\r\nFor context, I was giving an overview of HTTP/3 CONNECT-UDP to someone completely new to MASQUE. The inclusion of a flow ID in the H3 DATAGRAM frame makes total sense, it's for multiplexing. However, in my example, the client made a request on stream ID 0 and used a datagram-flow-id of 0. Partly because of this overlap, the person I was presenting to made the comment \"why do you need the datagram-flow-id header, couldn't you just use the stream ID\"? Since the stream and datagram flow IDs have a linked lifetime, this observation makes some sense. \r\n\r\nThere might be benefits to having independence between stream ID and flow ID space. However, having reread the spec a few times now, I think the main purpose comes from the intention to be flexible. What I mean by that is, the use of HTTP/3 DATAGRAMS is opportunistic and that it is reasonable to fallback to carying tunnelled UDP datagram payload on streams. So, is the primary intention that \"datagram-flow-id\" is echoed in responses to allow clients to understand if they can use DATAGRAMS or if they have to use streams? \r\n\r\n",
+      "createdAt": "2020-11-05T12:33:03Z",
+      "updatedAt": "2020-11-05T17:44:25Z",
+      "closedAt": null,
+      "comments": [
+        {
+          "author": "DavidSchinazi",
+          "authorAssociation": "COLLABORATOR",
+          "body": "The purpose of the Datagram-Flow-Id header is to negotiate which flow ID to use. An alternative could be to use stream IDs, but that has downsides:\r\n- it means that we'll be more likely to use longer encodings for flow IDs\r\n- it needlessly ties the two namespaces (stream ID / flow ID) together, which prevents innovation - for example in [quic-proxy](https://tools.ietf.org/html/draft-pauly-masque-quic-proxy-00) we have multiple requests share a flow ID",
+          "createdAt": "2020-11-05T17:26:53Z",
+          "updatedAt": "2020-11-05T17:26:53Z"
+        },
+        {
+          "author": "LPardue",
+          "authorAssociation": "NONE",
+          "body": "Thanks for the clarification. That challenges my earlier statement that alluded to \"CONNECT-UDP sharing fate with the flow ID\", they actually have more independence. It might be worth saying something about flow ID reuse across requests, I presume that reuse is an error in the case of vanilla CONNECT-UDP but is fine in quic-proxy when requests are used for active flow ID manipulation?",
+          "createdAt": "2020-11-05T17:44:25Z",
+          "updatedAt": "2020-11-05T17:44:25Z"
+        }
+      ]
+    },
+    {
+      "number": 17,
+      "id": "MDU6SXNzdWU3MzY5MDYxMDA=",
+      "title": "Consider error codes for the client to terminate CONNECT-UDP streams",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/17",
+      "state": "OPEN",
+      "author": "LPardue",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "Imagine a client wants to talk HTTP to a server via a proxy.\r\n\r\nFor basic HTTP/3, the optimal case is to talk QUIC-in-QUIC via MASQUE and DATAGRAMs. But that requires the proxy (or chain of proxies) to support DATAGRAMs. So a client might discover via the CONNECT-UDP response that only the stream mode is available. \r\n\r\nTransferring QUIC over a reliable stream has some problems. A client might decide its not worth the effort and want to just fallback to HTTP over TLS (via just a CONNECT stream). At such a point, it would likely want to abort the stream and having an error code to indicate this could help the MASQUE server understand that this happened.\r\n\r\nThere's a variant of the above. Since the server can't judge UDP connectivity, it's upon the client to actively close the stream if it detects connectivity issues. An error code to this effect might also help.",
+      "createdAt": "2020-11-05T12:50:12Z",
+      "updatedAt": "2020-11-05T12:50:12Z",
       "closedAt": null,
       "comments": []
     }
