@@ -1,6 +1,6 @@
 {
   "magic": "E!vIA5L86J2I",
-  "timestamp": "2020-11-10T00:44:34.614412+00:00",
+  "timestamp": "2020-11-12T00:39:42.396152+00:00",
   "repo": "ietf-wg-masque/draft-ietf-masque-connect-udp",
   "labels": [
     {
@@ -248,7 +248,7 @@
       "labels": [],
       "body": "Issue created by me on [2020-05-27](https://github.com/DavidSchinazi/masque-drafts/issues/27):\r\n\r\nCONNECT-UDP can be used across multiple proxy hops, and each of these hops can have a different MTU, so it could be useful for the client to be notified of the maximum DATAGRAM payload size that will make it across all the hops. This value could also change over time, so we could consider adding the ability to communicate that.",
       "createdAt": "2020-08-28T04:14:55Z",
-      "updatedAt": "2020-08-28T04:15:11Z",
+      "updatedAt": "2020-11-11T18:50:49Z",
       "closedAt": null,
       "comments": [
         {
@@ -257,6 +257,62 @@
           "body": "Comment from me on 2020-07-24:\r\n\r\nThis might be best handled by an extension to CONNECT-UDP, but keeping the issue open for now.",
           "createdAt": "2020-08-28T04:15:11Z",
           "updatedAt": "2020-08-28T04:15:11Z"
+        },
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "I think we even might want a way to communicate MTU directly to the client with only one proxy hop as for datagram use the client potentially needs to indicate a lower MTU for downlink traffic when encapsulated by the proxy also to the server",
+          "createdAt": "2020-11-11T13:53:21Z",
+          "updatedAt": "2020-11-11T13:53:21Z"
+        },
+        {
+          "author": "LPardue",
+          "authorAssociation": "NONE",
+          "body": "I'm not sure I understand this issue. Shouldn't the client use DPLPMTUD? Maybe adding some other method of PMTUD helps but I don't know if the reasons are clear to everyone. For a single hop case, I'd expect the existing QUIC mechanisms to allow the detection of the maximum DATAGRAM payload size.",
+          "createdAt": "2020-11-11T14:14:20Z",
+          "updatedAt": "2020-11-11T14:14:20Z"
+        },
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "The problem is that the server might need to reduce its packet size in order for the proxy to fit that packet into one QUIC tunnel datagram frame (alternatively the proxy could send too big packet in the streams but that might also not what we want). The client could indicate a smaller packet size to the server but it might need input from the proxy to know what the right size is. We could hard code that or the server could use some kind of PMTUD but given we have a trusted signalling channel, I think we should use it (and avoid guessing).",
+          "createdAt": "2020-11-11T16:51:23Z",
+          "updatedAt": "2020-11-11T16:51:23Z"
+        },
+        {
+          "author": "LPardue",
+          "authorAssociation": "NONE",
+          "body": "Oh so are you saying that there might be a use case for some QUIC extension that allows endpoints to signal possible MTUs to each other, and then MASQUE could leverage that directly or indirectly?",
+          "createdAt": "2020-11-11T17:12:03Z",
+          "updatedAt": "2020-11-11T17:12:03Z"
+        },
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "I was thinking about having a MASQUE signal from the proxy to the client (on the MASQUE/app layer) and then the client could use that to set max_packet_size towards the server in QUIC. Of course max_packet_size cannot be smaller than 1200 and you need this information before you send the first inner QUIC Initial packet. But details are to be worked out...",
+          "createdAt": "2020-11-11T17:28:26Z",
+          "updatedAt": "2020-11-11T17:28:26Z"
+        },
+        {
+          "author": "LPardue",
+          "authorAssociation": "NONE",
+          "body": "Thanks. So using draft-32 terminology `max_udp_payload_size` and this scenario\r\n\r\nclient -> Proxy1 -> Proxy2 -> target\r\n\r\nProxy1 knows proxy2's `max_udp_payload_size`, so it sends it back for the client to populate *it's* max_udp_payload_size TP? ",
+          "createdAt": "2020-11-11T17:46:37Z",
+          "updatedAt": "2020-11-11T17:46:37Z"
+        },
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "Ups missed the terminology change...\r\n\r\nI think that's the original case David mentioned but even with only one proxy there might be a need for additional signal as the proxy can only talk to the client and not to the target server. With one proxy there are two QUIC connections - one between the client and the proxy that uses datagrams; and one between the client and the target server that uses stream. However, the proxy needs to take the UDP payload from server and fit into one datagram to the client. Potentially the client can guess what the maximum number of bytes it that a proxy can fit into a datagram or we can fix it as a requirement (or we can signal it explicitly), however, this number of less than max_udp_payload_size because there is the QUIC packet and datagram frame overhead. And then also somehow the target server would need to know that number to limit its UDP payload size (the QUIC max_udp_payload_size of the e2d connection between the client and server).  ",
+          "createdAt": "2020-11-11T18:08:47Z",
+          "updatedAt": "2020-11-11T18:08:47Z"
+        },
+        {
+          "author": "LPardue",
+          "authorAssociation": "NONE",
+          "body": "The way I thought about it for the e2e QUIC connection is that the client takes the minimum of the known tunnel max_udp_payload_size, subtracts the overheads and advertises a smaller value to the target. \r\n\r\nHowever, that's not a complete answer. And is overly pessimistic if QUIC-aware proxying could be used.",
+          "createdAt": "2020-11-11T18:50:49Z",
+          "updatedAt": "2020-11-11T18:50:49Z"
         }
       ]
     },
@@ -334,7 +390,7 @@
       "labels": [],
       "body": "Who SHOULD have the responsibility for rate pacing and preventing bursts > ~10 packets? I can imagine a few models:\r\n\r\n- The client paces DATAGRAM frames on the tunneled UDP connection: this would allow QUIC implementations to not change, at least in this respect, when running over MASQUE. It also hopes the outer connection congestion control and/or the proxy logic will not cause these frames/datagrams to bunch up at their egresses.\r\n- The tunneled connection is as bursty as it wants to be, but the outer connection is paced: this has issues with heavy connection multiplexing, and the achievable rate on the outer connection may have no relationship to the rate end-to-end.\r\n- The proxy applies pacing and burst limits at its UDP egress: it's not clear how the proxy would obtain the correct pacing rate without an explicit signal. Of course some UDP apps have no notion of these concepts, so then what?\r\n\r\nAnyway, I'm suspicious that a wild west approach with no advice at all will lead to suboptimal outcomes, though it would not break interop (I wouldn't suggest any MUSTs here). Not saying anything would also preclude any explicit signaling, if that turns out to be beneficial.\r\n\r\nArguably, this is a thing for Magnus's draft, but I suspect that, as with MTU, there is much stronger consensus that pacing is A Necessary Thing than all the IP header fields in that draft. The proxy has no mechanism to flow control datagrams, so some sort of check on egress would be nice to avoid becoming a DoS vector.",
       "createdAt": "2020-10-09T19:07:07Z",
-      "updatedAt": "2020-10-09T21:01:18Z",
+      "updatedAt": "2020-11-11T17:00:52Z",
       "closedAt": null,
       "comments": [
         {
@@ -350,6 +406,13 @@
           "body": "Upon further reflection, given a strong recommendation to not buffer datagrams at the proxy, the only performance issue I can see presupposes that we have two layers of congestion control, which is not a good presumption at this point.\r\n\r\nSo I agree that adding text discouraging buffering Datagrams for bursts will solve this issue.",
           "createdAt": "2020-10-09T21:01:18Z",
           "updatedAt": "2020-10-09T21:01:18Z"
+        },
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "Buffering datagrams can be beneficial when the link capacity on the link between the proxy and client is unstable. However, I believe you are talking about not buffering data that is sent towards the server, right?",
+          "createdAt": "2020-11-11T17:00:52Z",
+          "updatedAt": "2020-11-11T17:00:52Z"
         }
       ]
     },
@@ -381,7 +444,7 @@
       "labels": [],
       "body": "This is a placeholder to discuss the effects/mitigations for nested congestion control, as required in the charter.",
       "createdAt": "2020-10-09T21:13:57Z",
-      "updatedAt": "2020-10-12T18:10:49Z",
+      "updatedAt": "2020-11-11T17:12:05Z",
       "closedAt": null,
       "comments": [
         {
@@ -404,6 +467,13 @@
           "body": "I don't think this is a question of correctness (it doesn't create infinite loops or deadlocks), but one of performance.\r\n\r\nWhile is some respects routers have \"congestion controllers\", they are generally not probing the path bandwidth or measuring latency, just looking at their local queue occupancy. Maybe your answer is to simply drop all datagrams for which there isn't immediately available cwnd; that may work, though we'd have to think about whether or not that's better than queueing them.\r\n\r\nIn QUIC we specifically exempted pure ACKs from congestion control because we were concerned about deadlocks, as congestion control could block sending ACKs that would unblock the connection. I don't think that's an issue here. But bad choices for the proxy scheduler could result in large delay spikes on these acks.\r\n\r\nI'll spend some time thinking about corner cases, but fundamentally I don't have a problem with your proposal to simply add some caveats.",
           "createdAt": "2020-10-12T18:06:13Z",
           "updatedAt": "2020-10-12T18:10:49Z"
+        },
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "The problem isn't that the masque proxy might drop packets; that's fine as that a congestion signal as any other signal from a router, as David said; usually this is called AQM and not congestion control though. The problem is that there are two actual congestion controllers which react to the same input signal (loss) and try to control the same output signal (rate) but operating on different time scales. In TCP the outer connection would conceal losses but add delay; so the inner connection you not get the input signal but see changes in delay that can negatively interact with the control loop as that's not the expected scenario. In QUIC when datagrams are use the losses are not concealed and both controllers react to the same input signal. However, if the outer tunnel QUIC connection between the client and the proxy is working on a much smaller time scale, it actually faster and it should be the limiting factor. Still, I think more work is needed here and also some text to acknowledge this in the draft.",
+          "createdAt": "2020-11-11T17:12:05Z",
+          "updatedAt": "2020-11-11T17:12:05Z"
         }
       ]
     },
@@ -435,9 +505,24 @@
       "labels": [],
       "body": "If there is an address migration or NAT rebinding on the MASQUE connection, it might be good to have a synthetic event of the same type on any related outgoing UDP flows (i.e. change the MASQUE proxy's server-facing port).\r\n\r\nPros:\r\n- servers can reset their path specific variables, especially MTU.\r\n\r\nCons:\r\n- Would break UDP connections that don't support multihoming (including some QUIC server deployments!) One could argue that exposing this kind of thing to the endpoint actually preserves end-to-end information, I guess.\r\n- The resulting path validation would not otherwise be necessary, as the MASQUE connection already validated it.\r\n\r\nGiven the tradeoffs, perhaps this is a MAY for MASQUE proxies.",
       "createdAt": "2020-10-26T17:41:48Z",
-      "updatedAt": "2020-10-26T17:41:48Z",
+      "updatedAt": "2020-11-11T23:20:08Z",
       "closedAt": null,
-      "comments": []
+      "comments": [
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "If we want way for the client to trigger an address change, we should make this explicitly by providing a way for the client to request that. However, I not sure what the use case is...?",
+          "createdAt": "2020-11-11T17:14:34Z",
+          "updatedAt": "2020-11-11T17:14:34Z"
+        },
+        {
+          "author": "martinduke",
+          "authorAssociation": "NONE",
+          "body": "The use case is that the QUIC end server ought to reset its path variables if there has been an address migration. It is unnecessary but harmless for the server to validate the path.\r\n\r\nThere's a separate problem with Server Preferred Address. I'm not sure what the end client would do with that over a CONNECT-UDP tunnel.",
+          "createdAt": "2020-11-11T23:20:07Z",
+          "updatedAt": "2020-11-11T23:20:07Z"
+        }
+      ]
     },
     {
       "number": 15,
@@ -451,7 +536,7 @@
       "labels": [],
       "body": "So I'd kinda forgotten that when H3 DATAGRAMS are not available (e.g. in HTTP/2 etc) CONNECT-UDP allows a mode where UDP datagram payload is transferred to the proxy as one contiguous bytestream of HTTP payload. How do receiving endpoints slice up this bytestream to ensure the atomic payloads are reconstructed properly? A proxy needs to make sure it sends the correct payload in the UDP datagram is will send, a client needs to construct the accurate UDP datagram payload in order to process whatever protocol it is tunnelling.\r\n\r\nThe specification doesn't say anything about how message boundaries might be signalled or acted upon. Is the intention maybe to rely on DATA frames for delineation? Implementations might not be able to guarantee that frames boundaries match 1:1. For instance quiche provides a r[ecv_body() method](https://docs.quic.tech/quiche/h3/struct.Connection.html#method.recv_body) to read arbitrary amounts of payload data from request streams; DATA rame boundaries are not exposed to applications.",
       "createdAt": "2020-11-05T12:29:46Z",
-      "updatedAt": "2020-11-05T18:27:05Z",
+      "updatedAt": "2020-11-11T17:18:49Z",
       "closedAt": null,
       "comments": [
         {
@@ -467,6 +552,13 @@
           "body": "I think so yes. I missed it somehow, so perhaps some editorial work would help improve things. For instance, the DATAGRAM frame supports up to 62-bit lengths but in this case case the frame is limited to 16 bits.\r\n\r\nIn the API I mentioned earlier, a proxy would need to try and read 2 bytes from the stream, then try to read as many bytes as the length indicated. That's certainly doable but needs a bit work in the application side. (those bytes might not be available, so the app needs to buffer things itself).\r\n\r\nIn the opposite direction there's a problem if the target presents datagrams with a length larger than can be expressed in 16 bits. We might want to highlight that the proxy can only drop these on the floor. Endpoints should be able to deal with that just like any PTB situation.",
           "createdAt": "2020-11-05T16:43:23Z",
           "updatedAt": "2020-11-05T18:27:05Z"
+        },
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "I actually thought that would be nice to use DATA frames as this would allow for more extensibility. How hard would it be to expose frame boundary for a masque implementation? Alternatively we could maybe define a new frame type?",
+          "createdAt": "2020-11-11T17:18:49Z",
+          "updatedAt": "2020-11-11T17:18:49Z"
         }
       ]
     },
@@ -482,7 +574,7 @@
       "labels": [],
       "body": "I think it might help to make the purpose of the datagram-flow-id header clearer in the specification.\r\n\r\nFor context, I was giving an overview of HTTP/3 CONNECT-UDP to someone completely new to MASQUE. The inclusion of a flow ID in the H3 DATAGRAM frame makes total sense, it's for multiplexing. However, in my example, the client made a request on stream ID 0 and used a datagram-flow-id of 0. Partly because of this overlap, the person I was presenting to made the comment \"why do you need the datagram-flow-id header, couldn't you just use the stream ID\"? Since the stream and datagram flow IDs have a linked lifetime, this observation makes some sense. \r\n\r\nThere might be benefits to having independence between stream ID and flow ID space. However, having reread the spec a few times now, I think the main purpose comes from the intention to be flexible. What I mean by that is, the use of HTTP/3 DATAGRAMS is opportunistic and that it is reasonable to fallback to carying tunnelled UDP datagram payload on streams. So, is the primary intention that \"datagram-flow-id\" is echoed in responses to allow clients to understand if they can use DATAGRAMS or if they have to use streams? \r\n\r\n",
       "createdAt": "2020-11-05T12:33:03Z",
-      "updatedAt": "2020-11-05T17:44:25Z",
+      "updatedAt": "2020-11-11T17:47:06Z",
       "closedAt": null,
       "comments": [
         {
@@ -498,6 +590,13 @@
           "body": "Thanks for the clarification. That challenges my earlier statement that alluded to \"CONNECT-UDP sharing fate with the flow ID\", they actually have more independence. It might be worth saying something about flow ID reuse across requests, I presume that reuse is an error in the case of vanilla CONNECT-UDP but is fine in quic-proxy when requests are used for active flow ID manipulation?",
           "createdAt": "2020-11-05T17:44:25Z",
           "updatedAt": "2020-11-05T17:44:25Z"
+        },
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "I thought the main reason is that the QUIC stream ID is not exposed to the HTTP layer? However, even if a different stream ID is used on the QUIC layer, you could still use the datagram ID to remember the associated stream on the HTTP layer.",
+          "createdAt": "2020-11-11T17:47:06Z",
+          "updatedAt": "2020-11-11T17:47:06Z"
         }
       ]
     },
@@ -513,10 +612,118 @@
       "labels": [],
       "body": "Imagine a client wants to talk HTTP to a server via a proxy.\r\n\r\nFor basic HTTP/3, the optimal case is to talk QUIC-in-QUIC via MASQUE and DATAGRAMs. But that requires the proxy (or chain of proxies) to support DATAGRAMs. So a client might discover via the CONNECT-UDP response that only the stream mode is available. \r\n\r\nTransferring QUIC over a reliable stream has some problems. A client might decide its not worth the effort and want to just fallback to HTTP over TLS (via just a CONNECT stream). At such a point, it would likely want to abort the stream and having an error code to indicate this could help the MASQUE server understand that this happened.\r\n\r\nThere's a variant of the above. Since the server can't judge UDP connectivity, it's upon the client to actively close the stream if it detects connectivity issues. An error code to this effect might also help.",
       "createdAt": "2020-11-05T12:50:12Z",
-      "updatedAt": "2020-11-05T12:50:12Z",
+      "updatedAt": "2020-11-11T19:16:08Z",
       "closedAt": null,
-      "comments": []
+      "comments": [
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "Actually I was wondering if there is any reason for the masque proxy to not support datagram mode (as long as datagrams are negotiated in the handshake of the QUIC tunnel connection underneath).\r\n\r\nHowever, not sure if we need to let the proxy know why a client aborts a stream. What should the proxy do with this information?",
+          "createdAt": "2020-11-11T17:50:53Z",
+          "updatedAt": "2020-11-11T17:50:53Z"
+        },
+        {
+          "author": "LPardue",
+          "authorAssociation": "NONE",
+          "body": "More specific error codes could allow the proxy to detect a higher rate of client drop outs for a specific reason. That usefulness is debatable (hence this issue :)).\r\n\r\nThis specific chaining case is allowed by the specification, so we should assume that some deployment might end up using it. Dynamic deployments might find that the proxy chain conditions change in an uncoordinated way, finding why clients are grumpy via metrics is a lot easier than waiting for user reports.",
+          "createdAt": "2020-11-11T19:16:08Z",
+          "updatedAt": "2020-11-11T19:16:08Z"
+        }
+      ]
+    },
+    {
+      "number": 19,
+      "id": "MDU6SXNzdWU3NDAxMzEzOTg=",
+      "title": "Additional options for CONNECT_UDP",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/issues/19",
+      "state": "OPEN",
+      "author": "martinduke",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "There are several things in the IP layer that a normal application running over a UDP socket can control: ECN, DSCP, etc. Magnus's draft is a comprehensive list, but these are the two with the strongest case (ECN being particularly compelling, IMO).\r\n\r\nAs an individual, I would be sad if there was no way to use ECN for MASQUE except to do IP proxying. As an AD, I think this functionality would absolutely be in scope if we could form a consensus around it.\r\n\r\nI don't have a problem with support for this being optional, or even in a separate CONNECT-UDP extension draft, but I'm putting in issue here to preserve the discussion item. If the outcome is that someone needs to write an extension draft, I'm fine with that.",
+      "createdAt": "2020-11-10T18:09:40Z",
+      "updatedAt": "2020-11-11T22:30:23Z",
+      "closedAt": null,
+      "comments": [
+        {
+          "author": "DavidSchinazi",
+          "authorAssociation": "COLLABORATOR",
+          "body": "I agree that there should be a mechanism that allows using ECN with CONNECT-UDP.\r\n\r\nHowever, I feel strongly that this shouldn't be a required part of CONNECT-UDP, because\r\n1. it's not required for a minimum viable product\r\n2. some operating systems don't let user-space applications access this data from received UDP packets\r\n\r\nHaving it be an optional part of the CONNECT-UDP spec could be doable, but I'd personally prefer it to be its own draft and extension to CONNECT-UDP. That will prevent this topic from delaying the main CONNECT-UDP document.",
+          "createdAt": "2020-11-10T19:31:09Z",
+          "updatedAt": "2020-11-10T19:31:09Z"
+        },
+        {
+          "author": "mirjak",
+          "authorAssociation": "NONE",
+          "body": "I think this is an important use that requires at minimum need to have some basic signalling mechanism build into the base protocol with a well defined extension point. However, if we do that, I think we can also specific the ECN signalling knowing that we want it. I would like to discuss how this could look like.",
+          "createdAt": "2020-11-11T17:53:51Z",
+          "updatedAt": "2020-11-11T17:53:51Z"
+        },
+        {
+          "author": "LPardue",
+          "authorAssociation": "NONE",
+          "body": "What are the requirements of extensions such as this? \r\n\r\nI would hope that we can simply leverage the HTTP extension tools at our disposal rather than require anything additional. However, some of that hope depends on if extensions apply to a MASQUE tunnel connection, or individual CONNECT-UDP requests.\r\n\r\nI'm more on the side of doing any work in a separate document to CONNECT-UDP.  ",
+          "createdAt": "2020-11-11T19:06:08Z",
+          "updatedAt": "2020-11-11T19:06:08Z"
+        },
+        {
+          "author": "martinduke",
+          "authorAssociation": "NONE",
+          "body": "One of the harder issues is that we probably need per-DATAGRAM of what ECN bits came in on the packet. The most straightforward way to do this is to have optional fields in the H3 DATAGRAM frame, though I can understand why people might not like that.",
+          "createdAt": "2020-11-11T22:21:53Z",
+          "updatedAt": "2020-11-11T22:21:53Z"
+        },
+        {
+          "author": "LPardue",
+          "authorAssociation": "NONE",
+          "body": "Oh, thanks for the clarification. ",
+          "createdAt": "2020-11-11T22:30:23Z",
+          "updatedAt": "2020-11-11T22:30:23Z"
+        }
+      ]
     }
   ],
-  "pulls": []
+  "pulls": [
+    {
+      "number": 18,
+      "id": "MDExOlB1bGxSZXF1ZXN0NTE4NjM2ODgx",
+      "title": "Add tags for interop",
+      "url": "https://github.com/ietf-wg-masque/draft-ietf-masque-connect-udp/pull/18",
+      "state": "OPEN",
+      "author": "tfpauly",
+      "authorAssociation": "NONE",
+      "assignees": [],
+      "labels": [],
+      "body": "Adding tags for the hackathon interop matrix",
+      "createdAt": "2020-11-10T17:08:45Z",
+      "updatedAt": "2020-11-10T17:21:37Z",
+      "baseRepository": "ietf-wg-masque/draft-ietf-masque-connect-udp",
+      "baseRefName": "main",
+      "baseRefOid": "bf3be74710658b4e270a0b76fbe28cd87bf399e4",
+      "headRepository": "tfpauly/draft-ietf-masque-connect-udp",
+      "headRefName": "tfp/interop",
+      "headRefOid": "800aca8af4e5ca348ea8c2bd477ea571829a0fe1",
+      "closedAt": null,
+      "mergedAt": null,
+      "mergedBy": null,
+      "mergeCommit": null,
+      "comments": [],
+      "reviews": [
+        {
+          "id": "MDE3OlB1bGxSZXF1ZXN0UmV2aWV3NTI3NDMzNDg4",
+          "commit": {
+            "abbreviatedOid": "800aca8"
+          },
+          "author": "chris-wood",
+          "authorAssociation": "NONE",
+          "state": "APPROVED",
+          "body": "",
+          "createdAt": "2020-11-10T17:21:37Z",
+          "updatedAt": "2020-11-10T17:21:37Z",
+          "comments": []
+        }
+      ]
+    }
+  ]
 }
