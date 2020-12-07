@@ -109,8 +109,8 @@ proxies) will switch to tunnel mode immediately after the
 blank line that concludes the successful response's header section;
 data received after that blank line is from the server identified by
 the request-target. Any response other than a successful response
-indicates that the tunnel has not yet been formed and that the
-connection remains governed by HTTP.
+indicates that the tunnel has not yet been formed. In HTTP/1.1, this means
+the connection remains governed by HTTP.
 
 A tunnel is closed when a tunnel intermediary detects that either
 side has closed its connection: the intermediary MUST attempt to send
